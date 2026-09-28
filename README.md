@@ -66,4 +66,8 @@ Run only the subcommands you configure: `cal-automation sync`, `cal-automation f
 
 Run the tests from a checkout with `python3 -m unittest discover -s tests -q`.
 
+## Releases
+
+Conventional Commits on `main` run tests and a package build before the release workflow tags the next version and creates a GitHub release. Package versions come from Git tags; there is no version-bump pull request. Pin the Git URL above to a published tag when installing.
+
 Licensed under [MIT](LICENSE).

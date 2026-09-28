@@ -1,0 +1,83 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+      - run: uv run python -m unittest discover -s tests -q
+      - run: uv build --quiet
+
+  release:
+    if: github.event_name == 'push'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Compute version from Conventional Commits
+        id: bump
+        shell: bash
+        run: |
+          set -euo pipefail
+          last_tag=$(git tag --list 'v*' --sort=-v:refname | head -n1 || true)
+          if [ -z "$last_tag" ]; then
+            range="HEAD"
+            last_tag="v0.0.0"
+          else
+            range="${last_tag}..HEAD"
+          fi
+
+          bump="none"
+          while IFS= read -r subject; do
+            case "$subject" in
+              *!:*) bump="major" ;;
+              feat:*|feat\(*\):*)
+                if [ "$bump" != major ]; then bump="minor"; fi ;;
+              fix:*|fix\(*\):*|perf:*|perf\(*\):*|refactor:*|refactor\(*\):*)
+                if [ "$bump" = none ]; then bump="patch"; fi ;;
+            esac
+          done < <(git log "$range" --no-merges --pretty=format:'%s')
+
+          if git log "$range" --no-merges --pretty=format:'%b' | grep -q '^BREAKING CHANGE:'; then
+            bump="major"
+          fi
+          if [ "$bump" = none ]; then
+            echo "No release-worthy commits since ${last_tag}."
+            exit 0
+          fi
+
+          IFS=. read -r major minor patch <<< "${last_tag#v}"
+          case "$bump" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+          new_tag="v${major}.${minor}.${patch}"
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git tag -a "$new_tag" -m "$new_tag"
+          git push origin "$new_tag"
+          echo "new_tag=$new_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        if: steps.bump.outputs.new_tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${{ steps.bump.outputs.new_tag }}" --generate-notes
