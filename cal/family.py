@@ -1,12 +1,12 @@
 """
 family-scheduler - Fetch local family events and add to family calendar.
 
-Pulls from ICS feeds configured in chezmoi [data.feeds] plus plain-HTTP
-event APIs configured in [data.sites] (dispatched via STRATEGIES), filters
+Pulls from ICS feeds configured in config.json [feeds] plus plain-HTTP
+event APIs configured in [sites] (dispatched via STRATEGIES), filters
 to evenings/weekends with no conflicts across all configured calendars,
 and adds to the family calendar.
 
-Requires: ical, chezmoi, icalendar (installed with cal-automation)
+Requires: ical, icalendar (installed with cal-automation)
 """
 
 import html
@@ -15,7 +15,7 @@ import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta
 
-from cal.util import chezmoi_data, ical, ical_write, is_eligible, local_tz, log, to_local
+from cal.util import calendar_entries, config_data, ical, ical_write, is_eligible, local_tz, log, to_local
 
 MARKER = "Managed by family-scheduler"
 LOOKAHEAD_DAYS = 14
@@ -208,7 +208,7 @@ def fetch_tribe(name, base_url, categories, days, tz):
     return events
 
 
-# Dispatch table for [data.sites] strategies.
+# Dispatch table for [sites] strategies.
 STRATEGIES = {
     "communico": fetch_communico,
     "tribe_rest": fetch_tribe,
@@ -218,9 +218,7 @@ STRATEGIES = {
 def occupied_slots(calendars, from_date, to_date, tz):
     """Return list of (start_dt, end_dt) tuples for busy events across all calendars."""
     occupied = []
-    for cal in calendars.values():
-        if not isinstance(cal, dict):
-            continue
+    for cal in calendar_entries(calendars).values():
         events = ical("list", "-c", cal["name"], "--from", from_date, "--to", to_date, "-o", "json")
         for e in events:
             if not e.get("all_day") and e.get("availability") != "free":
@@ -235,11 +233,11 @@ def already_added(family_cal, from_date, to_date):
 
 
 def main():
-    data = chezmoi_data()
+    data = config_data()
     calendars = data.get("calendars", {})
     feeds = data.get("feeds", {})
     sites = data.get("sites", {})
-    cal_entries = {k: v for k, v in calendars.items() if isinstance(v, dict)}
+    cal_entries = calendar_entries(calendars)
     target_entry = next((v for v in cal_entries.values() if v.get("family_scheduler_target")), None)
     family_cal = target_entry["name"] if target_entry else None
 
@@ -247,7 +245,7 @@ def main():
         log("No calendar with family_scheduler_target=true configured, skipping", TAG)
         return
     if not feeds and not sites:
-        log("No feeds or sites configured in chezmoi [data.feeds]/[data.sites], skipping", TAG)
+        log("No feeds or sites configured in config.json, skipping", TAG)
         return
 
     tz = local_tz()

@@ -4,13 +4,13 @@ import json
 import os
 import subprocess
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 
 @functools.lru_cache(maxsize=1)
 def ical_bin():
     """Find ical binary, caching result."""
-    from pathlib import Path
     return (
         subprocess.run(["which", "ical"], capture_output=True, text=True).stdout.strip()
         or str(Path.home() / ".local/bin/ical")
@@ -31,13 +31,26 @@ def ical_write(*args):
     subprocess.run([ical_bin(), *args], capture_output=True, text=True)
 
 
-def chezmoi_data():
-    """Load chezmoi template data as dict."""
-    result = subprocess.run(
-        ["chezmoi", "data", "--format", "json"],
-        capture_output=True, text=True,
-    )
-    return json.loads(result.stdout)
+def config_data():
+    """Load private JSON configuration from the XDG config directory."""
+    config_home = Path(os.environ.get("XDG_CONFIG_HOME", ""))
+    if not config_home.is_absolute():
+        config_home = Path.home() / ".config"
+    path = config_home / "cal" / "config.json"
+    try:
+        with path.open(encoding="utf-8") as stream:
+            data = json.load(stream)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON in {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValueError(f"{path} must contain a JSON object")
+    return data
+
+
+def calendar_entries(calendars):
+    """Exclude metadata mappings such as syncExclude from real calendars."""
+    return {label: value for label, value in calendars.items()
+            if isinstance(value, dict) and "name" in value}
 
 
 def local_tz():

@@ -5,12 +5,12 @@ For each weekday in the next 2 weeks, sums busy minutes in the 11am-1pm
 window. If 60+ minutes are consumed, places a 45-min Lunch block in the
 first free slot in the window (or 11:00 if fully packed).
 
-Requires: ical, chezmoi
+Requires: ical
 """
 
 from datetime import date, datetime, timedelta
 
-from cal.util import chezmoi_data, ical, local_tz, log
+from cal.util import calendar_entries, config_data, ical, local_tz, log
 
 TAG = "Managed by lunch-guard"
 WINDOW = (11 * 60, 13 * 60)  # 11:00-13:00 in minutes
@@ -117,9 +117,9 @@ def process_day(day, cal, tz):
 
 def main():
     tz = local_tz()
-    data = chezmoi_data()
+    data = config_data()
     calendars = data.get("calendars", {})
-    cal_entries = {k: v for k, v in calendars.items() if isinstance(v, dict)}
+    cal_entries = calendar_entries(calendars)
     guard_entry = next((v for v in cal_entries.values() if v.get("lunch_guard")), None)
     if not guard_entry:
         log("No calendar with lunch_guard=true configured, skipping", LOG_TAG)

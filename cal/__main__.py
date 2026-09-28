@@ -1,8 +1,7 @@
 """cal — calendar management automations via the ical CLI.
 
-Most subcommands run on a schedule via their own LaunchAgent in ~/Library/LaunchAgents/; the lunch guard runs as part of the sync subcommand rather than separately.
-Config (calendar names, sync rules, ICS feed URLs, reminder lists) comes from chezmoi
-data in .chezmoidata/local.yaml.
+Run subcommands on a schedule as needed; sync includes the lunch guard.
+Config: $XDG_CONFIG_HOME/cal/config.json (default ~/.config/cal/config.json).
 
 Subcommands:
     sync        Mirror busy blocks between configured calendars.

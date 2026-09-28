@@ -1,11 +1,12 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "cal-automation"
-version = "0.1.0"
-description = "Calendar automations backed by ical and chezmoi data"
+version = "0.2.0"
+description = "Calendar automations backed by ical and XDG configuration"
+license = "MIT"
 requires-python = ">=3.11"
 dependencies = ["icalendar>=6,<8"]
 

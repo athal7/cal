@@ -1,18 +1,18 @@
 # cal-automation package
 
-Python package installed as an isolated uv tool. Entry point: `cal-automation {babysitter,family,lunch,sync}`. Tests: `python3 -m unittest discover -s tests -q`.
+Python package with entry point `cal-automation {babysitter,family,lunch,sync}`. Tests: `python3 -m unittest discover -s tests -q`.
 
 ## Config source
 
-All calendar config comes from machine-local `chezmoi data` (in the dotfiles repo):
+All calendar config comes from `$XDG_CONFIG_HOME/cal/config.json` (default `~/.config/cal/config.json`):
 - `calendars` — calendar names, sync rules, inbound windows, ignore patterns
 - `feeds` — ICS feed URLs for family-scheduler
-- `reminders` — reminders list config for babysitter-check
+- `reminders` — reminders list config for babysitter-check; `sites` — other family event APIs
 
 ## Dependencies
 
 - `icalendar` (third-party) — declared in `pyproject.toml`, installed with the tool. Used only by `family.py` for ICS feed parsing (lazy import with ImportError fallback).
-- `ical` CLI, `remindctl`, `chezmoi` — called via subprocess from `util.py` and subcommand modules.
+- `ical` CLI and `remindctl` — called via subprocess from `util.py` and subcommand modules.
 
 ## util.py patterns
 

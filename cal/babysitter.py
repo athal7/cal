@@ -6,7 +6,7 @@ babysitter_check=true, checks if any overlapping event containing
 "babysit" exists across all configured calendars. If not, and no
 reminder already exists, adds one to the babysitter_reminders list.
 
-Requires: ical, remindctl, chezmoi
+Requires: ical, remindctl
 """
 
 import json
@@ -14,7 +14,7 @@ import subprocess
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from cal.util import chezmoi_data, ical, is_eligible, local_tz, log, to_local
+from cal.util import calendar_entries, config_data, ical, is_eligible, local_tz, log, to_local
 
 LOOKAHEAD_DAYS = 28
 EVENING_START = 17  # 5pm
@@ -68,10 +68,10 @@ def save_seen(titles: set) -> None:
 
 
 def main():
-    data = chezmoi_data()
+    data = config_data()
     calendars = data.get("calendars", {})
     reminders_config = data.get("reminders", {})
-    cal_entries = {k: v for k, v in calendars.items() if isinstance(v, dict)}
+    cal_entries = calendar_entries(calendars)
 
     # Find calendars to check for events needing babysitter coverage
     check_cals = {k: v for k, v in cal_entries.items() if v.get("babysitter_check")}

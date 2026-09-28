@@ -5,14 +5,14 @@ For each calendar with sync_to set, finds real events and ensures matching
 "Busy" blocks exist on destination calendars. Cleans up stale mirrors when
 the source event is gone.
 
-Requires: ical, chezmoi
+Requires: ical
 """
 
 import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from cal.util import chezmoi_data, ical, ical_write, local_tz, log, to_local
+from cal.util import calendar_entries, config_data, ical, ical_write, local_tz, log, to_local
 
 MARKER = "Managed by sync-calendars"
 WEEKS = 4
@@ -140,14 +140,14 @@ def save_last_run(keys):
 
 
 def main():
-    data = chezmoi_data()
+    data = config_data()
     calendars = data.get("calendars", {})  # {label: {name, sync_to, ...}}
     sync_exclude = calendars.get("syncExclude", {})
     from_date = str(date.today())
     tz = local_tz()
 
     # Filter to real calendar entries (exclude syncExclude sub-key)
-    cal_entries = {k: v for k, v in calendars.items() if isinstance(v, dict)}
+    cal_entries = calendar_entries(calendars)
 
     if len(cal_entries) < 2:
         log("Need at least 2 calendars configured, skipping", TAG)
