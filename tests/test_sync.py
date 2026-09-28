@@ -1,6 +1,7 @@
 """Tests for cal.sync pure logic and events_for filtering."""
 
 import unittest
+from datetime import timedelta, timezone
 from unittest.mock import patch
 
 # Import sync module functions directly.
@@ -17,6 +18,8 @@ from cal.sync import (
     MARKER,
 )
 
+
+LOCAL_TZ = timezone(timedelta(hours=-7))
 
 # ---------------------------------------------------------------------------
 # is_ooo_event
@@ -124,28 +127,28 @@ class TestInInboundWindow(unittest.TestCase):
 
     def test_within_hours(self):
         event = {"start_date": "2026-06-15T10:00:00-07:00"}
-        self.assertTrue(in_inbound_window(event, None, inbound_start=9, inbound_end=17))
+        self.assertTrue(in_inbound_window(event, LOCAL_TZ, inbound_start=9, inbound_end=17))
 
     def test_before_start_hour(self):
         event = {"start_date": "2026-06-15T03:00:00-07:00"}
-        self.assertFalse(in_inbound_window(event, None, inbound_start=9, inbound_end=17))
+        self.assertFalse(in_inbound_window(event, LOCAL_TZ, inbound_start=9, inbound_end=17))
 
     def test_after_end_hour(self):
         event = {"start_date": "2026-06-15T17:00:00-07:00"}
-        self.assertFalse(in_inbound_window(event, None, inbound_start=9, inbound_end=17))
+        self.assertFalse(in_inbound_window(event, LOCAL_TZ, inbound_start=9, inbound_end=17))
 
     def test_no_window_restricts_all(self):
         """No window means no restriction."""
         event = {"start_date": "2026-06-15T03:00:00-07:00"}
-        self.assertTrue(in_inbound_window(event, None))
+        self.assertTrue(in_inbound_window(event, LOCAL_TZ))
 
     def test_inbound_days_exclude_weekend(self):
-        event = {"start_date": "2026-06-14T10:00:00-07:00"}  # Saturday
-        self.assertFalse(in_inbound_window(event, None, inbound_days=["mon", "tue", "wed", "thu", "fri"]))
+        event = {"start_date": "2026-06-14T10:00:00-07:00"}  # Sunday
+        self.assertFalse(in_inbound_window(event, LOCAL_TZ, inbound_days=["mon", "tue", "wed", "thu", "fri"]))
 
     def test_inbound_days_include_weekday(self):
         event = {"start_date": "2026-06-15T10:00:00-07:00"}  # Monday
-        self.assertTrue(in_inbound_window(event, None, inbound_days=["mon", "tue", "wed", "thu", "fri"]))
+        self.assertTrue(in_inbound_window(event, LOCAL_TZ, inbound_days=["mon", "tue", "wed", "thu", "fri"]))
 
 
 # ---------------------------------------------------------------------------
