@@ -26,6 +26,17 @@ def ical(*args):
         return []
 
 
+def ical_delete(event_id):
+    """Delete one event, raising so callers can preserve state on failure."""
+    result = subprocess.run(
+        [ical_bin(), "delete", event_id, "--force"],
+        capture_output=True, text=True,
+    )
+    if result.returncode:
+        detail = (result.stderr or result.stdout).strip()
+        raise RuntimeError(detail or f"ical delete exited with status {result.returncode}")
+
+
 def ical_write(*args):
     """Run ical CLI for write operations (no JSON parsing)."""
     subprocess.run([ical_bin(), *args], capture_output=True, text=True)
