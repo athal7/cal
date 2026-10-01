@@ -45,7 +45,7 @@ jobs:
           fi
 
           bump="none"
-          while IFS= read -r subject; do
+          while IFS= read -r subject || [[ -n "$subject" ]]; do
             case "$subject" in
               *!:*) bump="major" ;;
               feat:*|feat\(*\):*)
