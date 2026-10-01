@@ -8,7 +8,9 @@ first free slot in the window (or 11:00 if fully packed).
 Requires: ical
 """
 
+import json
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 from cal.util import calendar_entries, config_data, ical, local_tz, log
 
@@ -18,6 +20,23 @@ RISK_THRESHOLD = 60           # busy minutes that trigger a block
 DURATION = 45                 # lunch block length
 
 LOG_TAG = "lunch-guard"
+STATE_FILE = Path.home() / ".local/share/lunch-guard/state.json"
+
+
+def load_seen():
+    """Calendar/day pairs with a guard previously seen on the calendar."""
+    if not STATE_FILE.exists():
+        return set()
+    return {tuple(key) for key in json.loads(STATE_FILE.read_text())["seen"]}
+
+
+def save_seen(seen):
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = STATE_FILE.with_suffix(".tmp")
+    temporary.write_text(json.dumps({
+        "seen": [list(key) for key in sorted(seen) if key[1] >= str(date.today())]
+    }))
+    temporary.replace(STATE_FILE)
 
 
 def to_min(dt_str, tz):
@@ -67,13 +86,16 @@ def first_free_slot(intervals, ws, we, duration):
     return cursor if we - cursor >= duration else ws
 
 
-def process_day(day, cal, tz):
+def process_day(day, cal, tz, seen):
     if day.weekday() >= 5:
         return
 
     events = ical("list", "-c", cal, "--from", str(day), "--to", str(day), "-o", "json")
 
     guard = next((e for e in events if e.get("notes", "").strip() == TAG), None)
+    key = (cal, str(day))
+    if guard:
+        seen.add(key)
 
     has_lunch_meeting = any(
         "lunch" in e.get("title", "").lower()
@@ -86,6 +108,7 @@ def process_day(day, cal, tz):
         if guard:
             log(f"{day}: Lunch meeting exists, removing guard event", LOG_TAG)
             ical("delete", guard["id"], "--force")
+            seen.discard(key)
         else:
             log(f"{day}: Lunch meeting exists, protected", LOG_TAG)
         return
@@ -97,12 +120,16 @@ def process_day(day, cal, tz):
         if guard:
             log(f"{day}: OK ({busy_mins}min busy), removing guard event", LOG_TAG)
             ical("delete", guard["id"], "--force")
+            seen.discard(key)
         else:
             log(f"{day}: OK ({busy_mins}min busy)", LOG_TAG)
         return
 
     if guard:
         log(f"{day}: AT RISK ({busy_mins}min busy), guard exists", LOG_TAG)
+        return
+    if key in seen:
+        log(f"{day}: AT RISK ({busy_mins}min busy), guard deleted, skipping", LOG_TAG)
         return
 
     slot = first_free_slot(intervals, *WINDOW, DURATION)
@@ -113,6 +140,10 @@ def process_day(day, cal, tz):
          "-s", f"{day} {st}",
          "-e", f"{day} {et}",
          "--notes", TAG)
+    created = ical("list", "-c", cal, "--from", str(day), "--to", str(day), "-o", "json")
+    if not any(e.get("notes", "").strip() == TAG for e in created):
+        raise RuntimeError(f"{day}: Lunch guard creation could not be confirmed")
+    seen.add(key)
 
 
 def main():
@@ -126,10 +157,14 @@ def main():
         return
     cal = guard_entry["name"]
     today = date.today()
+    seen = load_seen()
     for i in range(14):
         day = today + timedelta(days=i)
+        before = seen.copy()
         try:
-            process_day(day, cal, tz)
+            process_day(day, cal, tz, seen)
         except Exception as e:
             log(f"ERROR {day}: {e}", LOG_TAG)
+        if seen != before:
+            save_seen(seen)
     log("done", LOG_TAG)
