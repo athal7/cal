@@ -12,7 +12,7 @@ import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from cal.util import calendar_entries, config_data, ical, local_tz, log
+from cal.util import calendar_entries, config_data, ical, ical_delete, local_tz, log
 
 TAG = "Managed by lunch-guard"
 WINDOW = (11 * 60, 13 * 60)  # 11:00-13:00 in minutes
@@ -107,7 +107,7 @@ def process_day(day, cal, tz, seen):
     if has_lunch_meeting:
         if guard:
             log(f"{day}: Lunch meeting exists, removing guard event", LOG_TAG)
-            ical("delete", guard["id"], "--force")
+            ical_delete(guard["id"])
             seen.discard(key)
         else:
             log(f"{day}: Lunch meeting exists, protected", LOG_TAG)
@@ -119,7 +119,7 @@ def process_day(day, cal, tz, seen):
     if busy_mins < RISK_THRESHOLD:
         if guard:
             log(f"{day}: OK ({busy_mins}min busy), removing guard event", LOG_TAG)
-            ical("delete", guard["id"], "--force")
+            ical_delete(guard["id"])
             seen.discard(key)
         else:
             log(f"{day}: OK ({busy_mins}min busy)", LOG_TAG)

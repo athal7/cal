@@ -1,5 +1,6 @@
 """Lunch guard behavior across calendar runs and manual deletions."""
 
+import subprocess
 import tempfile
 import unittest
 from datetime import date, timedelta, timezone
@@ -7,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from cal import lunch
+from cal.util import ical_delete
 
 
 class TestLunchGuardDeletion(unittest.TestCase):
@@ -22,6 +24,11 @@ class TestLunchGuardDeletion(unittest.TestCase):
         }).start()
         patch.object(lunch, "log").start()
         patch.object(lunch, "ical", side_effect=self.calendar_command).start()
+        patch.object(
+            lunch,
+            "ical_delete",
+            side_effect=lambda event_id: self.calendar_command("delete", event_id, "--force"),
+        ).start()
         self.events = {}
         self.day = next(date.today() + timedelta(days=i) for i in range(1, 7)
                         if (date.today() + timedelta(days=i)).weekday() < 5)
@@ -89,6 +96,30 @@ class TestLunchGuardDeletion(unittest.TestCase):
         self.events[("Work", str(self.day))] = [self.busy(self.day)]
         lunch.main()
         self.assertEqual(len(self.guards(self.day)), 1)
+
+    def test_failed_automatic_deletion_preserves_seen_guard(self):
+        self.events[("Work", str(self.day))] = [self.busy(self.day), {
+            "id": "lunch-meeting", "title": "Lunch meeting", "notes": "",
+            "availability": "busy", "start_date": f"{self.day}T12:00:00Z",
+            "end_date": f"{self.day}T13:00:00Z",
+        }, {
+            "id": "old-guard", "title": "Lunch", "notes": lunch.TAG,
+        }]
+        with patch.object(lunch, "ical_delete", side_effect=RuntimeError("delete failed")):
+            lunch.main()
+        self.assertEqual(len(self.guards(self.day)), 1)
+
+        self.events[("Work", str(self.day))][:] = [self.busy(self.day)]
+        lunch.main()
+        self.assertEqual(self.guards(self.day), [])
+
+    def test_ical_delete_raises_on_nonzero_exit(self):
+        result = subprocess.CompletedProcess(["ical"], 1, "", "permission denied")
+        with patch("cal.util.ical_bin", return_value="ical"), patch(
+            "cal.util.subprocess.run", return_value=result
+        ):
+            with self.assertRaisesRegex(RuntimeError, "permission denied"):
+                ical_delete("guard-id")
 
     def test_failed_creation_does_not_suppress_later_attempt(self):
         self.events[("Work", str(self.day))] = [self.busy(self.day)]
