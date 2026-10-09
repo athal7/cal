@@ -79,6 +79,7 @@ def events_for(calendar, src_label, from_date, to_date, tz, sync_exclude,
                ignore_patterns=None, cal_entries=None):
     """Fetch real (non-mirror) events for a calendar.
 
+    Only accepted invitations and events without an invitation can create holds.
     Allows OOO events from source calendars that have ooo_all_day set,
     whether they are all-day or timed. Non-OOO all-day events are excluded.
     """
@@ -95,7 +96,9 @@ def events_for(calendar, src_label, from_date, to_date, tz, sync_exclude,
             or (not e.get("all_day") and not is_ooo_event(e))
         )
         and e.get("availability") != "free"
-        and e.get("status") != "cancelled"
+        and e.get("status", "").lower() not in ("tentative", "canceled", "cancelled")
+        # EventKit reports "unknown" when this is our own event (no invitation).
+        and e.get("self_status") in (None, "unknown", "accepted")
         and not is_excluded(e, src_label, sync_exclude)
         and not is_locally_ignored(e, ignore_patterns)
     ]

@@ -62,6 +62,8 @@ Example `config.json` (replace names, URLs, and list names with your own):
 
 `calendars` is keyed by your own labels; each calendar needs an `ical` name. `sync_to` names destination labels. Optional sync settings include `lookahead_weeks`, `ignore_patterns`, `passthrough`, `ooo_all_day`, `default_title`, `title_mappings`, and destination `inbound_start`, `inbound_end`, `inbound_days` (three-letter weekday names). `syncExclude` maps exact event titles to source labels under `calendars`. `lunch_guard`, `family_scheduler_target`, and `babysitter_check` select calendars for those jobs; `babysitter_ignore_patterns` filters titles. `feeds` maps labels to ICS URLs. `sites` maps labels to API configurations: `tribe_rest` uses `base_url`, optional `categories` and `days`; `communico` uses `base_url`, optional `client`, `ages`, and `days`. `reminders` maps labels to lists with `name`; mark the target with `babysitter_reminders`.
 
+Sync creates or keeps destination holds only for events you created or invitations you accepted. Tentative/maybe, declined, pending, and canceled events do not create holds; existing managed holds for them are removed on the next sync.
+
 The lunch guard remembers appointments it has observed in `~/.local/share/lunch-guard/state.json`; if you delete one, it will not recreate it for that calendar day. This state is local to the user account running the automation.
 Run only the subcommands you configure: `cal-automation sync`, `cal-automation family`, `cal-automation babysitter`, or `cal-automation lunch`. A missing, malformed, or non-object config fails instead of silently skipping scheduled work.
 
