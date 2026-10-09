@@ -1,8 +1,10 @@
 """Tests for cal.sync pure logic and events_for filtering."""
 
 import unittest
-from datetime import timedelta, timezone
+from datetime import date, timedelta, timezone
 from unittest.mock import patch
+
+from cal import sync as sync_module
 
 # Import sync module functions directly.
 # We patch the ical dependency before calling events_for.
@@ -267,6 +269,24 @@ class TestEventsFor(unittest.TestCase):
         result = self._run_events_for([event])
         self.assertEqual(len(result), 0)
 
+    def test_only_accepted_or_created_events_included(self):
+        for self_status in ("accepted", "unknown", None):
+            with self.subTest(self_status=self_status):
+                event = self._event("Standup", self_status=self_status)
+                self.assertEqual(self._run_events_for([event]), [event])
+
+        for self_status in ("tentative", "maybe", "declined", "pending"):
+            with self.subTest(self_status=self_status):
+                self.assertEqual(self._run_events_for([
+                    self._event("Standup", self_status=self_status)
+                ]), [])
+
+        for status in ("tentative", "canceled", "cancelled"):
+            with self.subTest(status=status):
+                self.assertEqual(self._run_events_for([
+                    self._event("Standup", status=status, self_status="accepted")
+                ]), [])
+
     def test_excluded_event_filtered(self):
         event = self._event("Focus Time")
         sync_exclude = {"Focus Time": "work"}
@@ -310,6 +330,11 @@ class TestEventsFor(unittest.TestCase):
         result = self._run_events_for([event])
         self.assertEqual(len(result), 1)
 
+    def test_tentative_ooo_does_not_bypass_response_filter(self):
+        event = self._event("Out of Office", availability="Unavailable",
+                            all_day=True, self_status="tentative")
+        self.assertEqual(self._run_events_for([event]), [])
+
     def test_ooo_excluded_when_ooo_all_day_false(self):
         """OOO events should NOT be included when ooo_all_day is disabled."""
         cal_entries = {"work": {**self.src_cal, "ooo_all_day": False}}
@@ -349,6 +374,97 @@ class TestEventsFor(unittest.TestCase):
         }
         base.update(overrides)
         return base
+
+
+class TestSyncReconciliation(unittest.TestCase):
+    def test_existing_hold_retained_only_for_accepted_or_created_event(self):
+        start = f"{date.today() + timedelta(days=1)}T09:00:00Z"
+        end = f"{date.today() + timedelta(days=1)}T09:30:00Z"
+        config = {"calendars": {
+            "work": {"name": "Work", "sync_to": ["personal"]},
+            "personal": {"name": "Personal"},
+        }}
+        mirror = {"id": "hold-1", "title": "Busy", "start_date": start,
+                  "end_date": end, "notes": MARKER, "all_day": False}
+
+        for self_status, status, keep in (
+            ("accepted", "confirmed", True),
+            ("unknown", "confirmed", True),
+            ("tentative", "confirmed", False),
+            ("maybe", "confirmed", False),
+            ("declined", "confirmed", False),
+            ("pending", "confirmed", False),
+            ("accepted", "canceled", False),
+            ("accepted", "tentative", False),
+        ):
+            with self.subTest(self_status=self_status, status=status):
+                source = {"title": "Meeting", "start_date": start, "end_date": end,
+                          "status": status, "self_status": self_status,
+                          "availability": "busy", "all_day": False, "notes": ""}
+
+                def listed(*args):
+                    return [source] if args[2] == "Work" else [mirror]
+
+                with patch.object(sync_module, "config_data", return_value=config), \
+                     patch.object(sync_module, "ical", side_effect=listed), \
+                     patch.object(sync_module, "local_tz", return_value=timezone.utc), \
+                     patch.object(sync_module, "load_last_run", return_value=set()), \
+                     patch.object(sync_module, "save_last_run") as save, \
+                     patch.object(sync_module, "ical_write") as write, \
+                     patch.object(sync_module, "log"), \
+                     patch("cal.lunch.main"):
+                    sync_module.main()
+                if keep:
+                    write.assert_not_called()
+                    save.assert_called_once_with({("personal", start, end)})
+                else:
+                    write.assert_called_once_with("delete", "hold-1", "--force")
+                    save.assert_called_once_with(set())
+
+    def test_only_accepted_or_created_events_create_holds(self):
+        start = f"{date.today() + timedelta(days=1)}T09:00:00Z"
+        end = f"{date.today() + timedelta(days=1)}T09:30:00Z"
+        config = {"calendars": {
+            "work": {"name": "Work", "sync_to": ["personal"]},
+            "personal": {"name": "Personal"},
+        }}
+
+        for self_status, status, should_add in (
+            ("accepted", "confirmed", True),
+            ("unknown", "confirmed", True),
+            (None, "confirmed", True),
+            ("tentative", "confirmed", False),
+            ("maybe", "confirmed", False),
+            ("declined", "confirmed", False),
+            ("pending", "confirmed", False),
+            ("accepted", "canceled", False),
+            ("accepted", "tentative", False),
+        ):
+            with self.subTest(self_status=self_status, status=status):
+                source = {"title": "Meeting", "start_date": start, "end_date": end,
+                          "status": status, "self_status": self_status,
+                          "availability": "busy", "all_day": False, "notes": ""}
+
+                def listed(*args):
+                    return [source] if args[2] == "Work" else []
+
+                with patch.object(sync_module, "config_data", return_value=config), \
+                     patch.object(sync_module, "ical", side_effect=listed), \
+                     patch.object(sync_module, "local_tz", return_value=timezone.utc), \
+                     patch.object(sync_module, "load_last_run", return_value=set()), \
+                     patch.object(sync_module, "save_last_run") as save, \
+                     patch.object(sync_module, "ical_write") as write, \
+                     patch.object(sync_module, "log"), \
+                     patch("cal.lunch.main"):
+                    sync_module.main()
+                if should_add:
+                    write.assert_called_once_with(
+                        "add", "Busy", "-c", "Personal", "-s", start, "-e", end,
+                        "--notes", MARKER, "--no-alert")
+                    save.assert_called_once_with({("personal", start, end)})
+                else:
+                    write.assert_not_called()
+                    save.assert_called_once_with(set())
 
 
 # ---------------------------------------------------------------------------
