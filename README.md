@@ -5,11 +5,11 @@ Calendar automations using [`ical`](https://github.com/BRO3886/ical). The `cal-a
 ## Install
 
 ```sh
-uv tool install --from git+https://github.com/athal7/cal.git@v0.2.0 cal-automation
+brew install athal7/tap/cal-automation
 cal-automation --help
 ```
 
-Python's `icalendar` library is installed with the tool. The external `ical` CLI must be on `PATH`; `babysitter` also requires `remindctl`. Calendar access and Reminders permissions belong to those host tools.
+The formula installs Python and the `icalendar` library. The external [`ical`](https://github.com/BRO3886/ical) CLI must be on `PATH`; `babysitter` also requires `remindctl`. Calendar access and Reminders permissions belong to those host tools.
 
 ## Configure
 
@@ -71,6 +71,6 @@ Run the tests from a checkout with `python3 -m unittest discover -s tests -q`.
 
 ## Releases
 
-Conventional Commits on `main` run tests and a package build before the release workflow tags the next version and creates a GitHub release. Package versions come from Git tags; there is no version-bump pull request. Pin the Git URL above to a published tag when installing.
+Conventional Commits on `main` run tests and a package build before the release workflow tags the next version and creates a GitHub release. Package versions come from Git tags; there is no version-bump pull request. The [Homebrew tap](https://github.com/athal7/homebrew-tap) checks for new tags daily and updates the `cal-automation` formula. Run `brew update && brew upgrade cal-automation` to install a newer release after the tap has updated.
 
 Licensed under [MIT](LICENSE).
